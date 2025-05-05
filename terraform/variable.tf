@@ -61,8 +61,4 @@ variable "node_size" {
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
-  default     = {
-    Environment = "Development"
-    Project     = "NotesApp"
-  }
 }
