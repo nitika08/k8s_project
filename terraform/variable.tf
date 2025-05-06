@@ -28,11 +28,11 @@ variable "aks_dns_prefix" {
   default     = "k8sapp"
 }
 
-variable "kubernetes_version" {
+/*variable "kubernetes_version" {
   description = "Kubernetes version"
   type        = string
-  default     = "1.27.3"
-}
+  default     = "1.29.2"
+}*/
 
 variable "node_count" {
   description = "Initial number of nodes in the AKS cluster"
@@ -58,7 +58,4 @@ variable "node_size" {
   default     = "Standard_D2_v2"
 }
 
-variable "tags" {
-  description = "Tags to apply to resources"
-  type        = map(string)
-}
+
