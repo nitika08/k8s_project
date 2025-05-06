@@ -4,6 +4,8 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+  }
+}
 
 provider "azurerm" {
   features {}
@@ -16,7 +18,6 @@ provider "azurerm" {
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
 }
 
 # Create Azure Container Registry
@@ -26,7 +27,6 @@ resource "azurerm_container_registry" "acr" {
   location            = azurerm_resource_group.rg.location
   sku                 = "Standard"
   admin_enabled       = true
-  tags                = var.tags
 }
 
 # Create AKS cluster
@@ -35,11 +35,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = var.aks_dns_prefix
-  kubernetes_version  = var.kubernetes_version
+  #kubernetes_version  = var.kubernetes_version
+  #sku_tier            = "Premium"
 
   default_node_pool {
     name                = "default"
-    node_count          = var.node_count
+    # Removed node_count - not compatible with auto-scaling
     vm_size             = var.node_size
     os_disk_size_gb     = 30
     enable_auto_scaling = true
@@ -57,12 +58,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
     load_balancer_sku = "standard"
     service_cidr      = "10.0.0.0/16"
     dns_service_ip    = "10.0.0.10"
-    docker_bridge_cidr = "172.17.0.1/16"
   }
 
   role_based_access_control_enabled = true
-
-  tags = var.tags
 }
 
 # Create virtual network
@@ -71,7 +69,6 @@ resource "azurerm_virtual_network" "vnet" {
   address_space       = ["10.1.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  tags                = var.tags
 }
 
 # Create subnet
@@ -83,12 +80,12 @@ resource "azurerm_subnet" "aks_subnet" {
 }
 
 # Assign AcrPull role to AKS
-resource "azurerm_role_assignment" "aks_acr_pull" {
+/*resource "azurerm_role_assignment" "aks_acr_pull" {
   principal_id                     = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
   role_definition_name             = "AcrPull"
   scope                            = azurerm_container_registry.acr.id
   skip_service_principal_aad_check = true
-}
+}*/
 
 # Output kubeconfig for easy access
 resource "local_file" "kubeconfig" {
