@@ -37,7 +37,7 @@ jobs:
         
     - name: Get AKS Credentials
       run: |
-        az aks get-credentials --resource-group notes-app-rg --name notes-app-aks --admin
+        az aks get-credentials --resource-group k8s-app-rg --name k8s-app-aks --admin
         
     - name: Get ACR Credentials
       id: acr-credentials
