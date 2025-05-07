@@ -1,33 +1,27 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
 env:
   ACR_NAME: k8sappacr  # Update this with your ACR name
-  ACR_LOGIN_SERVER: k8sappacr.azurecr.io  # Update this with your ACR login server
-
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
-
+      
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
-
+      
     - name: Azure Login
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-
+        
     - name: Setup kubectl
       uses: azure/setup-kubectl@v1
-
+      
     - name: Deploy Infrastructure with Terraform
       run: |
         cd terraform
@@ -40,21 +34,22 @@ jobs:
         TF_VAR_client_id: ${{ secrets.AZURE_CLIENT_ID }}
         TF_VAR_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
         TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-
+        
     - name: Get AKS Credentials
       run: |
         az aks get-credentials --resource-group notes-app-rg --name notes-app-aks --admin
-
+        
     - name: Get ACR Credentials
       id: acr-credentials
       run: |
-        ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group notes-app-rg --query loginServer --output tsv)
-        ACR_USERNAME=$(az acr credential show --name $ACR_NAME --resource-group notes-app-rg --query username --output tsv)
-        ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --resource-group notes-app-rg --query "passwords[0].value" --output tsv)
-        echo "::set-output name=acr_login_server::$ACR_LOGIN_SERVER"
-        echo "::set-output name=acr_username::$ACR_USERNAME"
+        ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group k8s-app-rg --query loginServer --output tsv)
+        ACR_USERNAME=$(az acr credential show --name $ACR_NAME --resource-group k8s-app-rg --query username --output tsv)
+        ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --resource-group k8s-app-rg --query "passwords[0].value" --output tsv)
+        echo "acr_login_server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+        echo "acr_username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+        echo "acr_password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+        # Mask sensitive values
         echo "::add-mask::$ACR_PASSWORD"
-        echo "::set-output name=acr_password::$ACR_PASSWORD"
         
     - name: Docker Login to ACR
       uses: docker/login-action@v1
@@ -62,31 +57,24 @@ jobs:
         registry: ${{ steps.acr-credentials.outputs.acr_login_server }}
         username: ${{ steps.acr-credentials.outputs.acr_username }}
         password: ${{ steps.acr-credentials.outputs.acr_password }}
-
-    - name: Build and Push Docker images
-      uses: azure/docker-login@v1
-      with:
-        login-server: ${{ steps.acr-details.outputs.acr_login_server }}
-        acr_username: ${{ secrets.ACR_USERNAME }}
-        acr_password: ${{ secrets.ACR_PASSWORD }}
     
     - name: Build and Push Frontend
       run: |
-        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }} ./frontend
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }}
-        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:latest
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:latest
-
+        docker build -t ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-frontend:${{ github.sha }} ./frontend
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-frontend:${{ github.sha }}
+        docker tag ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-frontend:${{ github.sha }} ${{ steps.acr-credentials.outputs.acr_login_server }}/notes-frontend:latest
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-frontend:latest
+        
     - name: Build and Push Backend
       run: |
-        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }} ./backend
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }}
-        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:latest
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:latest
-
+        docker build -t ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-api:${{ github.sha }} ./backend
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-api:${{ github.sha }}
+        docker tag ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-api:${{ github.sha }} ${{ steps.acr-credentials.outputs.acr_login_server }}/notes-api:latest
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-api:latest
+        
     - name: Build and Push Database
       run: |
-        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }} ./database
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }}
-        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:latest
-        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:latest
+        docker build -t ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-db:${{ github.sha }} ./database
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-db:${{ github.sha }}
+        docker tag ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-db:${{ github.sha }} ${{ steps.acr-credentials.outputs.acr_login_server }}/notes-db:latest
+        docker push ${{ steps.acr-credentials.outputs.acr_login_server }}/k8s-db:latest
