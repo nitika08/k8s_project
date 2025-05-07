@@ -1,14 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontend-service
-  labels:
-    app: notes
-    tier: frontend
+  name: frontend
+  namespace: notes-app
 spec:
   selector:
-    app: notes
-    tier: frontend
+    app: frontend
   ports:
   - port: 80
     targetPort: 80
