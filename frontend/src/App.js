@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import NoteList from './components/NoteList';
-import { fetchNotes, createNote } from './services/api';
 import './App.css';
+import NoteList from './components/NoteList';
+import { getAllNotes, createNote } from './services/api';
 
 function App() {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadNotes();
@@ -14,20 +13,17 @@ function App() {
 
   const loadNotes = async () => {
     try {
-      setLoading(true);
-      const data = await fetchNotes();
+      const data = await getAllNotes();
       setNotes(data);
     } catch (error) {
       console.error('Error loading notes:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleAddNote = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newNote.trim()) return;
-
+    
     try {
       await createNote({ content: newNote });
       setNewNote('');
@@ -40,10 +36,10 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Notes App</h1>
+        <h1>Notes Application</h1>
       </header>
       <main>
-        <form onSubmit={handleAddNote}>
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
             value={newNote}
@@ -52,12 +48,7 @@ function App() {
           />
           <button type="submit">Add Note</button>
         </form>
-        
-        {loading ? (
-          <p>Loading notes...</p>
-        ) : (
-          <NoteList notes={notes} />
-        )}
+        <NoteList notes={notes} />
       </main>
     </div>
   );
