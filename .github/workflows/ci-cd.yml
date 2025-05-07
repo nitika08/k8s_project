@@ -1,48 +1,92 @@
-# .github/workflows/ci-cd.yaml
 name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  ACR_NAME: k8sappacr  # Update this with your ACR name
+  ACR_LOGIN_SERVER: k8sappacr.azurecr.io  # Update this with your ACR login server
 
 jobs:
-  build-and-push:
+  build_and_deploy:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
 
-    - name: Cache Docker layers
-      uses: actions/cache@v2
+    - name: Azure Login
+      uses: azure/login@v1
       with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Log in to Azure Container Registry
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v1
+
+    - name: Deploy Infrastructure with Terraform
+      run: |
+        cd terraform
+        terraform init
+        terraform validate
+        terraform plan -out=tfplan
+        terraform apply -auto-approve tfplan
+      env:
+        TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        TF_VAR_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+        TF_VAR_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+
+    - name: Get AKS Credentials
+      run: |
+        az aks get-credentials --resource-group notes-app-rg --name notes-app-aks --admin
+
+    - name: Get ACR Credentials
+      id: acr-credentials
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group notes-app-rg --query loginServer --output tsv)
+        ACR_USERNAME=$(az acr credential show --name $ACR_NAME --resource-group notes-app-rg --query username --output tsv)
+        ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --resource-group notes-app-rg --query "passwords[0].value" --output tsv)
+        echo "::set-output name=acr_login_server::$ACR_LOGIN_SERVER"
+        echo "::set-output name=acr_username::$ACR_USERNAME"
+        echo "::add-mask::$ACR_PASSWORD"
+        echo "::set-output name=acr_password::$ACR_PASSWORD"
+        
+    - name: Docker Login to ACR
+      uses: docker/login-action@v1
+      with:
+        registry: ${{ steps.acr-credentials.outputs.acr_login_server }}
+        username: ${{ steps.acr-credentials.outputs.acr_username }}
+        password: ${{ steps.acr-credentials.outputs.acr_password }}
+
+    - name: Build and Push Docker images
       uses: azure/docker-login@v1
       with:
-        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-        username: ${{ secrets.ACR_USERNAME }}
-        password: ${{ secrets.ACR_PASSWORD }}
-
-    - name: Build and push web image
+        login-server: ${{ steps.acr-details.outputs.acr_login_server }}
+        acr_username: ${{ secrets.ACR_USERNAME }}
+        acr_password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Build and Push Frontend
       run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/web:latest ./web
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/web:latest
+        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }} ./frontend
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }}
+        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:latest
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-frontend:latest
 
-    - name: Build and push api image
+    - name: Build and Push Backend
       run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/api:latest ./api
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/api:latest
+        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }} ./backend
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }}
+        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:latest
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-api:latest
 
-    - name: Build and push db image
+    - name: Build and Push Database
       run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/db:latest ./db
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/db:latest
+        docker build -t ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }} ./database
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }}
+        docker tag ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:${{ github.sha }} ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:latest
+        docker push ${{ steps.acr-details.outputs.acr_login_server }}/notes-db:latest
