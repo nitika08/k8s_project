@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: notes-app
+  namespace: argocd
+spec:
+  description: Notes Application Project
+  sourceRepos:
+  - 'https://github.com/YOUR_USERNAME/azure-k8s-project'
+  destinations:
+  - namespace: notes-app
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
