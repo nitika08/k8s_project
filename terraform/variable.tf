@@ -1,7 +1,7 @@
 variable "resource_group_name" {
   description = "Name of the resource group"
   type        = string
-  default     = "k8s-app-rg"
+  default     = "k8s-app-rg1"
 }
 
 variable "location" {
@@ -13,19 +13,19 @@ variable "location" {
 variable "acr_name" {
   description = "Name of the Azure Container Registry"
   type        = string
-  default     = "k8sappacr"
+  default     = "k8sappacr1"
 }
 
 variable "aks_cluster_name" {
   description = "Name of the AKS cluster"
   type        = string
-  default     = "k8s-app-aks"
+  default     = "k8s-app-aks1"
 }
 
 variable "aks_dns_prefix" {
   description = "DNS prefix for AKS cluster"
   type        = string
-  default     = "k8sapp"
+  default     = "k8sapp1"
 }
 
 /*variable "kubernetes_version" {
